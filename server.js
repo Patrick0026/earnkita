@@ -1,39 +1,134 @@
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
-const DB_FILE = path.join(__dirname, 'db.json');
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
 app.use(express.json());
 app.use(express.static(__dirname));
 
-function readDB() {
-  if (!fs.existsSync(DB_FILE)) {
-    const initialData = { users: [], jobs: [], chats: [], reports: [], sessions: {} };
-    fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error('Missing SUPABASE_URL or SUPABASE_KEY environment variables.');
+}
+
+// Get one collection from Supabase
+async function readCollection(collection) {
+  const url =
+    ${SUPABASE_URL}/rest/v1/app_data +
+    ?collection=eq.${encodeURIComponent(collection)} +
+    &select=data;
+
+  const response = await fetch(url, {
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: Bearer ${SUPABASE_KEY}
+    }
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(Supabase read error: ${errorText});
   }
-  return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+
+  const rows = await response.json();
+
+  if (!rows.length) {
+    return collection === 'sessions' ? {} : [];
+  }
+
+  return rows[0].data;
 }
 
-function writeDB(data) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+// Save one collection to Supabase
+async function writeCollection(collection, data) {
+  const response = await fetch(
+    ${SUPABASE_URL}/rest/v1/app_data?on_conflict=collection,
+    {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: Bearer ${SUPABASE_KEY},
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify({
+        collection,
+        data,
+        updated_at: new Date().toISOString()
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(Supabase write error: ${errorText});
+  }
 }
 
-app.get('/api/:collection', (req, res) => {
-  const db = readDB();
-  const collection = req.params.collection;
-  res.json(db[collection] || []);
+// GET collection
+app.get('/api/:collection', async (req, res) => {
+  try {
+    const collection = req.params.collection;
+
+    const allowedCollections = [
+      'users',
+      'jobs',
+      'chats',
+      'reports',
+      'sessions'
+    ];
+
+    if (!allowedCollections.includes(collection)) {
+      return res.status(404).json({
+        error: 'Collection not found'
+      });
+    }
+
+    const data = await readCollection(collection);
+
+    res.json(data);
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: 'Failed to read data'
+    });
+  }
 });
 
-app.post('/api/:collection', (req, res) => {
-  const db = readDB();
-  const collection = req.params.collection;
-  if (!db[collection]) db[collection] = [];
-  
-  db[collection] = req.body;
-  writeDB(db);
-  res.json({ success: true });
+// POST collection
+app.post('/api/:collection', async (req, res) => {
+  try {
+    const collection = req.params.collection;
+
+    const allowedCollections = [
+      'users',
+      'jobs',
+      'chats',
+      'reports',
+      'sessions'
+    ];
+
+    if (!allowedCollections.includes(collection)) {
+      return res.status(404).json({
+        error: 'Collection not found'
+      });
+    }
+
+    await writeCollection(collection, req.body);
+
+    res.json({
+      success: true
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: 'Failed to save data'
+    });
+  }
 });
 
 app.listen(PORT, () => {
