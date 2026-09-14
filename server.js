@@ -57,5 +57,5 @@ app.post('/api/:collection', (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(EarnKita server running on port ${PORT});
+  console.log(`EarnKita server running on port ${PORT}`);
 });
