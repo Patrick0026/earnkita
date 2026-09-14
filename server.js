@@ -132,5 +132,5 @@ app.post('/api/:collection', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`EarnKita server running on port ${PORT}`);
-});
+  console.log('EarnKita server running on port ${PORT}');
+})
