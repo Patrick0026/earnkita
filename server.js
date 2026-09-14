@@ -41,18 +41,34 @@ app.get('/api/:collection', (req, res) => {
 
 // SAVE data
 app.post('/api/:collection', (req, res) => {
-  const db = readDB();
-  const collection = req.params.collection;
+  try {
+    const db = readDB();
+    const collection = req.params.collection;
 
-  if (!db[collection]) {
-    db[collection] = [];
+    if (!db[collection]) {
+      db[collection] = [];
+    }
+
+    db[collection] = req.body;
+
+    writeDB(db);
+
+    console.log(Saved ${collection}:, db[collection].length, 'items');
+
+    res.json({
+      success: true,
+      collection: collection,
+      count: db[collection].length
+    });
+
+  } catch (err) {
+    console.error(DATABASE SAVE ERROR:, err);
+
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
   }
-
-  db[collection] = req.body;
-
-  writeDB(db);
-
-  res.json({ success: true });
 });
 
 // Start server
