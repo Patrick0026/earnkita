@@ -1,0 +1,12 @@
+{
+  "name": "earnkita",
+  "version": "1.0.0",
+  "description": "EarnKita freelancing platform",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
