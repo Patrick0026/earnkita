@@ -891,6 +891,49 @@ document.getElementById('authForm').addEventListener('submit', async (e) => {
         toast(`Account is banned. Access restricted for ~${remainingDays} more day(s).`);
         return;
       }
+      // Fix missing closing template for adminJobList:
+    document.getElementById('adminJobList').innerHTML = jobs.length === 0 
+      ? '<p style="color:var(--muted);">No jobs posted.</p>' 
+      : jobs.map(j => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);">
+          <div>
+            <strong>${j.title}</strong> (${j.category})<br>
+            <small style="color:var(--muted);">Posted by: ${j.employerName} • Budget: ₱${j.budget} • Status: ${j.status}</small>
+          </div>
+          <button class="btn-small btn-danger" onclick="deleteJob(${j.id})">Delete Job</button>
+        </div>
+      `).join('');
+  }
+}
+
+// App Initialization
+async function initApp() {
+  const session = JSON.parse(localStorage.getItem(STORAGE_SESSION));
+  if (!session) {
+    document.getElementById('topNav').style.display = 'none';
+    showView('authView');
+    return;
+  }
+  document.getElementById('topNav').style.display = 'flex';
+  document.getElementById('userGreeting').textContent = `Hello, ${session.name}`;
+  document.getElementById('avatarBtn').textContent = session.name.charAt(0).toUpperCase();
+
+  if (session.role === 'admin') {
+    renderWorkspace();
+  } else if (session.role === 'employee') {
+    showView('employeeView');
+    document.getElementById('empWelcomeHeader').textContent = `Hi ${session.name}`;
+    document.getElementById('employeeOfWeekBanner').innerHTML = await renderEmployeeOfWeekBanner();
+    renderMarketplace();
+    renderWorkspace();
+  } else {
+    showView('employerView');
+    document.getElementById('empEmployerHeader').textContent = `Welcome, ${session.name}`;
+    renderWorkspace();
+  }
+}
+
+window.addEventListener('DOMContentLoaded', initApp);
       localStorage.setItem(STORAGE_SESSION, JSON.stringify(existingUser));
       toast(`Welcome back, ${existingUser.name}!`);
     }
