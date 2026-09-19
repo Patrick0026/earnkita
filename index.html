@@ -37,6 +37,15 @@ button{cursor:pointer;border:0;transition:all 0.2s ease;}
 .dropdown-item.danger{color:var(--danger)}
 .dropdown-item.danger:hover{background:#fee2e2}
 
+.notif-container{position:relative;}
+.notif-btn{position:relative;background:#f1f5f9;border:1px solid var(--line);padding:8px 12px;border-radius:10px;font-size:16px;cursor:pointer;}
+.notif-badge{position:absolute;top:-4px;right:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:800;padding:2px 6px;border-radius:10px;display:none;}
+.notif-dropdown{position:absolute;right:0;top:45px;width:320px;max-height:360px;overflow-y:auto;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);display:none;flex-direction:column;z-index:50;}
+.notif-dropdown.show{display:flex;}
+.notif-item{padding:12px 16px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink);line-height:1.4;}
+.notif-item:last-child{border-bottom:none;}
+.notif-item .notif-time{font-size:10px;color:var(--muted);margin-top:4px;}
+
 .container{max-width:1100px;margin:auto;padding:32px 16px}
 .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;background:#e0e7ff;color:var(--accent);font-size:13px;font-weight:700;margin-bottom:16px;box-shadow:0 2px 5px rgba(79,70,229,0.1);}
 .badge.admin-badge{background:#fee2e2;color:var(--danger);box-shadow:0 2px 5px rgba(225,29,72,0.1);}
@@ -120,9 +129,21 @@ button{cursor:pointer;border:0;transition:all 0.2s ease;}
     <button class="btn-small" id="roleToggleBtn" style="background:#f1f5f9;color:var(--ink);border:1px solid var(--line);box-shadow:none;" onclick="toggleUserRole()">Switch Role</button>
     <span id="userGreeting" style="font-size:14px;font-weight:700;"></span>
     
+    <!-- NOTIFICATION BUTTON & DROPDOWN -->
+    <div class="notif-container">
+      <button class="notif-btn" onclick="toggleNotifDropdown(event)">🔔 <span class="notif-badge" id="notifBadge">0</span></button>
+      <div class="notif-dropdown" id="notifDropdownMenu">
+        <div style="padding:12px 16px;font-weight:800;border-bottom:1px solid var(--line);background:#f8fafc;font-size:13px;">Ongoing Activity Notifications</div>
+        <div id="notifItemsContainer">
+          <div class="empty-state" style="padding:20px;font-size:12px;">No recent activity notifications.</div>
+        </div>
+      </div>
+    </div>
+
     <div class="user-avatar-container">
       <div class="user-avatar" id="avatarBtn" onclick="toggleUserDropdown(event)">E</div>
       <div class="user-dropdown" id="userDropdownMenu">
+        <button class="dropdown-item" onclick="openProfileInterface()">👤 Profile Interface</button>
         <button class="dropdown-item" onclick="openSettingsModal()">⚙️ Settings</button>
         <button class="dropdown-item" onclick="openReportModal()">🚨 Report Issue</button>
         <button class="dropdown-item danger" onclick="logout()">🚪 Log Out</button>
@@ -202,7 +223,6 @@ button{cursor:pointer;border:0;transition:all 0.2s ease;}
       <button class="nav-tab active" id="tabEmpMarket" onclick="switchEmpTab('market')">🔎 Job Marketplace</button>
       <button class="nav-tab" id="tabEmpApplied" onclick="switchEmpTab('applied')">📋 Applied & Active</button>
       <button class="nav-tab" id="tabEmpHistory" onclick="switchEmpTab('history')">📜 Transaction History</button>
-      <button class="nav-tab" id="tabEmpProfile" onclick="switchEmpTab('profile')">👨‍💼 My Profile</button>
       <button class="nav-tab" id="tabEmpMessages" onclick="switchEmpTab('messages')">💬 Messenger Hub</button>
     </div>
 
@@ -420,6 +440,18 @@ button{cursor:pointer;border:0;transition:all 0.2s ease;}
     <h1 style="margin:0 0 6px;font-weight:900;">EarnKita Platform Overview</h1>
     <p style="color:var(--muted);margin:0 0 24px;font-weight:500;">Monitor platform transactions, reports, user accounts, and resolve tickets.</p>
 
+    <!-- ADMIN EMPLOYEE OF THE WEEK SELECTION CARD -->
+    <div class="card" style="background:linear-gradient(135deg, #fffbeb, #fef3c7);border:1px solid #f59e0b;margin-bottom:24px;">
+      <h3 style="margin-top:0;font-weight:800;color:#92400e;">👑 Employee of the Week Selection</h3>
+      <p style="font-size:13px;color:#78350f;margin-bottom:12px;font-weight:500;">Manually pick a featured Employee of the Week to spotlight on all dashboards, or let the system auto-select based on performance scores.</p>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <select id="adminEowSelect" style="flex:1;padding:10px;border-radius:10px;border:1px solid #f59e0b;background:#fff;font-weight:600;">
+          <option value="">-- Auto-calculate based on score --</option>
+        </select>
+        <button class="btn-small" style="background:#d97706;" onclick="saveAdminEowChoice()">Save Selection</button>
+      </div>
+    </div>
+
     <!-- EMPLOYEE OF THE WEEK BANNER IN ADMIN -->
     <div id="adminEmployeeOfWeekContainer"></div>
 
@@ -590,6 +622,63 @@ async function saveServerData(collection, data) {
     throw err;
   }
 }
+
+function openProfileInterface() {
+  document.getElementById('userDropdownMenu').classList.remove('show');
+  let session = JSON.parse(localStorage.getItem(STORAGE_SESSION));
+  if (session.role === 'employee') {
+    switchEmpTab('profile');
+  } else {
+    showUserProfileModal(session.email);
+  }
+}
+
+function toggleNotifDropdown(event) {
+  event.stopPropagation();
+  const dropdown = document.getElementById('notifDropdownMenu');
+  dropdown.classList.toggle('show');
+}
+
+async function createNotification(recipientId, recipientEmail, title, message) {
+  let notifications = await fetchServerData('notifications');
+  notifications.push({
+    id: Date.now(),
+    recipientId,
+    recipientEmail,
+    title,
+    message,
+    date: new Date().toLocaleTimeString(),
+    read: false
+  });
+  await saveServerData('notifications', notifications);
+}
+
+async function renderNotifications() {
+  const session = JSON.parse(localStorage.getItem(STORAGE_SESSION));
+  if(!session) return;
+  const notifications = await fetchServerData('notifications');
+  const userNotifs = notifications.filter(n => String(n.recipientId) === String(session.id) || (n.recipientEmail && n.recipientEmail.toLowerCase() === session.email.toLowerCase())).reverse();
+
+  const container = document.getElementById('notifItemsContainer');
+  const badge = document.getElementById('notifBadge');
+
+  if(userNotifs.length === 0) {
+    container.innerHTML = `<div class="empty-state" style="padding:20px;font-size:12px;">No recent activity notifications.</div>`;
+    badge.style.display = 'none';
+    return;
+  }
+
+  badge.style.display = 'inline-block';
+  badge.textContent = userNotifs.length;
+
+  container.innerHTML = userNotifs.map(n => `
+    <div class="notif-item">
+      <strong>${n.title}</strong><br>
+      ${n.message}
+      <div class="notif-time">${n.date}</div>
+    </div>
+  `).join('');
+}
  
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -608,6 +697,10 @@ function closeDropdowns(event) {
   if (!event.target.closest('.user-avatar-container')) {
     const dropdown = document.getElementById('userDropdownMenu');
     if (dropdown) dropdown.classList.remove('show');
+  }
+  if (!event.target.closest('.notif-container')) {
+    const notifDropdown = document.getElementById('notifDropdownMenu');
+    if (notifDropdown) notifDropdown.classList.remove('show');
   }
 }
 
@@ -696,6 +789,10 @@ async function resolveAdminReport(reportId) {
     rep.status = 'Resolved';
     rep.adminReply = replyText;
     await saveServerData('reports', reports);
+    
+    // FIX 3: Send notification to ticket reporter upon Admin response
+    await createNotification(rep.reporterId, rep.reporterEmail, "Admin Ticket Response", `Admin replied to your ticket [${rep.category}]: "${replyText}"`);
+
     toast('Report marked resolved & reply saved publicly.');
     renderWorkspace();
   }
@@ -818,7 +915,6 @@ function switchEmpTab(tab) {
   document.getElementById('tabEmpMarket').classList.toggle('active', tab === 'market');
   document.getElementById('tabEmpApplied').classList.toggle('active', tab === 'applied');
   document.getElementById('tabEmpHistory').classList.toggle('active', tab === 'history');
-  document.getElementById('tabEmpProfile').classList.toggle('active', tab === 'profile');
   document.getElementById('tabEmpMessages').classList.toggle('active', tab === 'messages');
 
   document.getElementById('empMarketSection').style.display = tab === 'market' ? 'block' : 'none';
@@ -910,7 +1006,7 @@ async function createJob() {
     title, category, location, budget, deadline, workersNeeded, desc,
     applicants: [],
     hiredWorkers: [],
-    comments: [], // Requirement 5: Comment section
+    comments: [],
     status: 'active',
     paymentMethod: null,
     reviews: []
@@ -933,7 +1029,6 @@ async function applyToJob(jobId) {
   let jobs = await fetchServerData('jobs');
   let job = jobs.find(j => j.id === jobId);
 
-  // Requirement 6: Employer cannot apply to own job even in employee mode
   if (job && (String(job.employerId) === String(session.id) || job.employerEmail === session.email)) {
     toast('Employers cannot apply to their own job postings.');
     return;
@@ -949,29 +1044,52 @@ async function applyToJob(jobId) {
   
 async function hireWorker(jobId, workerId) {
   let jobs = await fetchServerData('jobs');
+  let users = await fetchServerData('users');
   let job = jobs.find(j => j.id === jobId);
+  let worker = users.find(u => u.id === workerId);
+
   if (job && !job.hiredWorkers.includes(workerId)) {
     job.hiredWorkers.push(workerId);
     await saveServerData('jobs', jobs);
+
+    // ADDED NOTIFICATION FOR HIRING WORKER
+    if (worker) {
+      await createNotification(worker.id, worker.email, "Hired for Job!", `${job.employerName} hired you for "${job.title}".`);
+    }
+
     toast('Worker hired successfully!');
     renderWorkspace();
   }
 }
 
-// Requirement 4: Allow employer to fire a worker
+// FIX 2: Check if job is completed before firing a worker
 async function fireWorker(jobId, workerId) {
-  if(!confirm('Are you sure you want to fire/remove this worker from the job?')) return;
   let jobs = await fetchServerData('jobs');
+  let users = await fetchServerData('users');
   let job = jobs.find(j => j.id === jobId);
+  
+  if (job && job.status === 'completed') {
+    toast('Once the job is completed you can no longer fire the worker.');
+    return;
+  }
+
+  if(!confirm('Are you sure you want to fire/remove this worker from the job?')) return;
+
   if (job && job.hiredWorkers) {
     job.hiredWorkers = job.hiredWorkers.filter(id => id !== workerId);
     await saveServerData('jobs', jobs);
+
+    // ADDED NOTIFICATION FOR FIRING WORKER
+    let worker = users.find(u => u.id === workerId);
+    if (worker) {
+      await createNotification(worker.id, worker.email, "Job Status Update", `${job.employerName} removed/fired you from "${job.title}".`);
+    }
+
     toast('Worker has been dismissed from this job.');
     renderWorkspace();
   }
 }
 
-// Requirement 5: Add comment to a job
 async function postJobComment(jobId) {
   const session = JSON.parse(localStorage.getItem(STORAGE_SESSION));
   const inputEl = document.getElementById(`commentInput_${jobId}`);
@@ -1008,11 +1126,24 @@ async function processPaymentConfirmation() {
   const method = document.getElementById('paymentGatewayMethod').value;
   
   let jobs = await fetchServerData('jobs');
+  let users = await fetchServerData('users');
   let job = jobs.find(j => j.id === jobId);
+
   if (job) {
     job.status = 'completed';
     job.paymentMethod = method;
     await saveServerData('jobs', jobs);
+
+    // ADDED NOTIFICATION FOR SUCCESSFUL PAYMENT
+    if(job.hiredWorkers && job.hiredWorkers.length > 0) {
+      for(let wId of job.hiredWorkers) {
+        let worker = users.find(u => u.id === wId);
+        if(worker) {
+          await createNotification(worker.id, worker.email, "Payment Released!", `${job.employerName} successfully paid you ₱${job.budget} for "${job.title}" via ${method}.`);
+        }
+      }
+    }
+
     closeModal('paymentModal');
     toast(`Payment via ${method} confirmed! Funds released.`);
     openReviewModal(jobId);
@@ -1157,7 +1288,7 @@ async function alterUserRating(userId) {
   renderWorkspace();
 }
 
-// Requirement 1: Profile picture fix
+// FIX 1: Profile picture preview and saving fix
 function previewProfileAvatar(event) {
   const file = event.target.files[0];
   if (file) {
@@ -1181,16 +1312,31 @@ async function saveWorkerProfile() {
     user.rate = document.getElementById('profRate').value.trim();
     user.skills = document.getElementById('profSkills').value.trim();
     user.about = document.getElementById('profAbout').value.trim();
-    if (tempAvatarBase64) {
+    
+    // Check avatar from temp or file input directly to ensure image saves
+    const fileInput = document.getElementById('profAvatarFile');
+    if (fileInput && fileInput.files && fileInput.files[0]) {
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        user.avatar = e.target.result;
+        await finishProfileSave(user, users);
+      };
+      reader.readAsDataURL(fileInput.files[0]);
+      return;
+    } else if (tempAvatarBase64) {
       user.avatar = tempAvatarBase64;
     }
-    
-    await saveServerData('users', users);
-    localStorage.setItem(STORAGE_SESSION, JSON.stringify(user));
-    toast('Profile updated successfully!');
-    renderWorkerProfilePreview(user);
-    initApp();
+
+    await finishProfileSave(user, users);
   }
+}
+
+async function finishProfileSave(user, users) {
+  await saveServerData('users', users);
+  localStorage.setItem(STORAGE_SESSION, JSON.stringify(user));
+  toast('Profile updated successfully!');
+  renderWorkerProfilePreview(user);
+  initApp();
 }
 
 function renderWorkerProfilePreview(u) {
@@ -1330,7 +1476,6 @@ async function renderEmployerHistory() {
   `;
 }
 
-// Requirement 3: Meta Messenger Interface logic
 function switchChatType(type) {
   activeChatType = type;
   document.getElementById('tabPublicChat').classList.toggle('active', type === 'public');
@@ -1376,7 +1521,6 @@ async function renderMessengerHub() {
   const users = await fetchServerData('users');
   const chats = await fetchServerData('chats');
 
-  // Find unique people who messaged or can be messaged
   const contacts = users.filter(u => u.email !== session.email && u.role !== 'admin');
   const sidebar = document.getElementById('messengerSidebar');
 
@@ -1537,27 +1681,56 @@ async function checkAndUpdateExpiredJobs() {
   }
 }
  
-// Requirement 2: Employee of the Week calculation & Headline
+// FEATURE 3: Admin override / choice for Employee of the Week
+async function saveAdminEowChoice() {
+  const selectedId = document.getElementById('adminEowSelect').value;
+  let settings = await fetchServerData('settings');
+  let eowObj = settings.find(s => s.id === 'eowConfig');
+  
+  if (!eowObj) {
+    eowObj = { id: 'eowConfig', manualEowId: selectedId ? parseInt(selectedId) : null };
+    settings.push(eowObj);
+  } else {
+    eowObj.manualEowId = selectedId ? parseInt(selectedId) : null;
+  }
+
+  await saveServerData('settings', settings);
+  toast(selectedId ? 'Employee of the Week set manually!' : 'Reset to auto-calculation.');
+  renderWorkspace();
+}
+
 async function renderEmployeeOfWeekBanner() {
   const users = await fetchServerData('users');
   const jobs = await fetchServerData('jobs');
+  const settings = await fetchServerData('settings');
   const employees = users.filter(u => u.role === 'employee');
 
   if(employees.length === 0) return '';
 
-  // Score workers by completed jobs count and average rating
+  const eowConfig = settings.find(s => s.id === 'eowConfig');
   let topWorker = null;
-  let maxScore = -1;
 
-  employees.forEach(emp => {
-    const completedCount = jobs.filter(j => j.hiredWorkers && j.hiredWorkers.includes(emp.id) && j.status === 'completed').length;
-    const avgRat = emp.ratings && emp.ratings.length ? (emp.ratings.reduce((a,b)=>a+b,0)/emp.ratings.length) : 4.0;
-    const score = (completedCount * 10) + (avgRat * 5);
-    if(score > maxScore) {
-      maxScore = score;
-      topWorker = { ...emp, completedCount, avgRat: avgRat.toFixed(1) };
+  if (eowConfig && eowConfig.manualEowId) {
+    const manualEmp = employees.find(e => e.id === eowConfig.manualEowId);
+    if (manualEmp) {
+      const completedCount = jobs.filter(j => j.hiredWorkers && j.hiredWorkers.includes(manualEmp.id) && j.status === 'completed').length;
+      const avgRat = manualEmp.ratings && manualEmp.ratings.length ? (manualEmp.ratings.reduce((a,b)=>a+b,0)/manualEmp.ratings.length) : 4.0;
+      topWorker = { ...manualEmp, completedCount, avgRat: avgRat.toFixed(1) };
     }
-  });
+  }
+
+  if (!topWorker) {
+    let maxScore = -1;
+    employees.forEach(emp => {
+      const completedCount = jobs.filter(j => j.hiredWorkers && j.hiredWorkers.includes(emp.id) && j.status === 'completed').length;
+      const avgRat = emp.ratings && emp.ratings.length ? (emp.ratings.reduce((a,b)=>a+b,0)/emp.ratings.length) : 4.0;
+      const score = (completedCount * 10) + (avgRat * 5);
+      if(score > maxScore) {
+        maxScore = score;
+        topWorker = { ...emp, completedCount, avgRat: avgRat.toFixed(1) };
+      }
+    });
+  }
 
   if(!topWorker) return '';
 
@@ -1631,7 +1804,6 @@ async function renderMarketplace() {
           <button class="btn-small" style="background:#f1f5f9;color:var(--ink);border:1px solid var(--line);box-shadow:none;" onclick="initiateDirectMessage('${j.employerEmail}')">💬 Contact Employer</button>
         </div>
 
-        <!-- REQUIREMENT 5: Comment Section -->
         <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line);">
           <h5 style="margin:0 0 10px 0;font-size:13px;color:var(--muted);text-transform:uppercase;">💬 Public Comments & Questions</h5>
           <div style="max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
@@ -1685,10 +1857,12 @@ async function renderWorkerList() {
 
 async function renderWorkspace() {
   await checkAndUpdateExpiredJobs();
+  await renderNotifications();
   const session = JSON.parse(localStorage.getItem(STORAGE_SESSION));
   const jobs = await fetchServerData('jobs');
   const users = await fetchServerData('users');
   const reports = await fetchServerData('reports');
+  const settings = await fetchServerData('settings');
 
   if (!session) return;
 
@@ -1697,6 +1871,14 @@ async function renderWorkspace() {
   if (session.role === 'admin') {
     showView('adminView');
     
+    // Populate Admin Employee of the week select dropdown
+    const eowSelect = document.getElementById('adminEowSelect');
+    const employees = users.filter(u => u.role === 'employee');
+    const eowConfig = settings.find(s => s.id === 'eowConfig');
+    
+    eowSelect.innerHTML = `<option value="">-- Auto-calculate based on score --</option>` + 
+      employees.map(e => `<option value="${e.id}" ${eowConfig && eowConfig.manualEowId === e.id ? 'selected' : ''}>${e.name} (${e.email})</option>`).join('');
+
     document.getElementById('adminEmployeeOfWeekContainer').innerHTML = await renderEmployeeOfWeekBanner();
 
     const completedJobs = jobs.filter(j => j.status === 'completed');
@@ -1709,7 +1891,6 @@ async function renderWorkspace() {
     document.getElementById('adminStatReports').textContent = pendingReports.length;
     document.getElementById('adminStatUsers').textContent = `${users.length} / ${MAX_ACCOUNTS}`;
 
-    // Requirement 7: Admin response visible to employee & employer
     const reportsContainer = document.getElementById('adminReportsList');
     if(reports.length === 0) {
       reportsContainer.innerHTML = '<p style="color:var(--muted);font-weight:500;">No reports or support tickets submitted.</p>';
@@ -1862,6 +2043,8 @@ async function renderWorkspace() {
       const applicantUsers = users.filter(u => j.applicants.includes(u.id));
       const hiredUsers = users.filter(u => j.hiredWorkers && j.hiredWorkers.includes(u.id));
       const hasReviewed = j.reviews && j.reviews.some(r => r.reviewerId === session.id);
+      const isCompleted = j.status === 'completed';
+
       return `
         <div class="card">
           <div class="job-header">
@@ -1888,7 +2071,7 @@ async function renderWorkspace() {
                     <button class="btn-small" style="background:#f1f5f9;color:var(--ink);border:1px solid var(--line);box-shadow:none;" onclick="initiateDirectMessage('${u.email}')">💬 Message Worker</button>
                     ${isHired ? `
                       <span style="color:var(--green);font-size:12px;font-weight:800;align-self:center;">Hired ✓</span>
-                      <button class="btn-small btn-danger" style="font-size:11px;" onclick="fireWorker(${j.id}, ${u.id})">Fire Worker</button>
+                      ${!isCompleted ? `<button class="btn-small btn-danger" style="font-size:11px;" onclick="fireWorker(${j.id},${u.id})">Fire Worker</button>` : ''}
                     ` : `<button class="btn-small" onclick="hireWorker(${j.id}, ${u.id})">Hire Worker</button>`}
                   </div>
                 </div>
